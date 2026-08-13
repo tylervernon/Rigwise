@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "PC Builder"
+description = "A focused frontend MVP for capturing a gamer's budget, target resolution, games, desired FPS, and hardware preferences before generating a PC build."
+version = "1.0.0"
+id = "artifacts/pc-builder"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23739
+
+[services.development]
+run = "pnpm --filter @workspace/pc-builder run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/pc-builder", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/pc-builder/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23739"
+BASE_PATH = "/"
