@@ -15,6 +15,11 @@ import {
   type SizePreference,
   type StoragePart,
 } from '@/data/parts';
+import {
+  findGamePerformance,
+  type GamePerformanceProfile,
+  type PerformanceTier,
+} from '@/data/game-performance';
 
 export type BuildPreferences = {
   size: SizePreference;
@@ -71,11 +76,45 @@ const appearanceRank: Record<AppearancePreference, number> = {
   Showpiece: 2,
 };
 
+type PerformanceContext = {
+  knownGames: Array<{ input: string; profile: GamePerformanceProfile }>;
+  unsupportedGames: string[];
+};
+
 function partIs<T extends Part['category']>(
   part: Part,
   category: T,
 ): part is Extract<Part, { category: T }> {
   return part.category === category;
+}
+
+function fpsToPerformanceTier(fps: number): PerformanceTier {
+  if (fps >= 165) return 5;
+  if (fps >= 120) return 4;
+  if (fps >= 90) return 3;
+  if (fps >= 60) return 2;
+  return 1;
+}
+
+function getPerformanceContext(games: string[]): PerformanceContext {
+  const knownGames: PerformanceContext['knownGames'] = [];
+  const unsupportedGames: string[] = [];
+
+  for (const input of games) {
+    const profile = findGamePerformance(input);
+    if (profile) {
+      knownGames.push({ input, profile });
+    } else {
+      unsupportedGames.push(input);
+    }
+  }
+
+  return { knownGames, unsupportedGames };
+}
+
+function scorePerformanceFit(availableTier: PerformanceTier, targetTier: PerformanceTier) {
+  const difference = availableTier - targetTier;
+  return difference >= 0 ? 8 + Math.min(difference, 2) : difference * 6;
 }
 
 function chooseMotherboard(
@@ -170,11 +209,28 @@ function chooseStorage(preferences: BuildPreferences, budget: number): StoragePa
 
 function chooseCpu(
   gpu: GpuPart,
+  request: BuildRequest,
   preferences: BuildPreferences,
   budget: number,
+  performanceContext: PerformanceContext,
 ): CpuPart {
   const cpuParts = allParts.filter((part): part is CpuPart => partIs(part, 'cpu'));
-  const targetTier = Math.max(resolutionTier[preferencesTargetResolution(gpu)], gpu.performanceTier - 1);
+  const targetFpsTier = fpsToPerformanceTier(request.fps);
+  const gameCpuPressure = performanceContext.knownGames.length
+    ? Math.max(
+      ...performanceContext.knownGames.map(({ profile }) => profile.performanceByResolution[request.resolution][gpu.id] ?? gpu.performanceTier),
+    )
+    : 0;
+  const resolutionPressure = request.resolution === '4K' ? resolutionTier[request.resolution] - 1 : resolutionTier[request.resolution];
+  const targetTier = Math.min(
+    4,
+    Math.max(
+      resolutionPressure,
+      targetFpsTier,
+      gameCpuPressure - (request.resolution === '1080p' ? 0 : 1),
+      gpu.performanceTier - 1,
+    ),
+  );
 
   return chooseClosest(cpuParts, (part) => {
     const balance = 6 - Math.abs(part.performanceTier - targetTier) * 2;
@@ -184,30 +240,35 @@ function chooseCpu(
   });
 }
 
-function preferencesTargetResolution(gpu: GpuPart): Resolution {
-  return gpu.targetResolutions.includes('4K')
-    ? '4K'
-    : gpu.targetResolutions.includes('1440p')
-      ? '1440p'
-      : '1080p';
-}
-
 export function selectBasicBuild(request: BuildRequest): SelectedBuild {
   const gpuParts = allParts.filter((part): part is GpuPart => partIs(part, 'gpu'));
-  const targetTier = resolutionTier[request.resolution] + (request.fps >= 165 ? 1 : 0);
+  const performanceContext = getPerformanceContext(request.games);
+  const targetFpsTier = fpsToPerformanceTier(request.fps);
+  const targetTier = Math.min(4, resolutionTier[request.resolution] + (request.fps >= 165 ? 1 : 0));
 
   const rankedGpus = [...gpuParts].sort((a, b) => {
     const aFit = a.targetResolutions.includes(request.resolution) ? 3 : 0;
     const bFit = b.targetResolutions.includes(request.resolution) ? 3 : 0;
-    const aBudget = a.price <= request.budget * 0.55 ? 2 : -2;
-    const bBudget = b.price <= request.budget * 0.55 ? 2 : -2;
+    const aBudgetDistance = a.price - request.budget * 0.55;
+    const bBudgetDistance = b.price - request.budget * 0.55;
+    const aBudget = aBudgetDistance <= 0 ? 3 : -4 - Math.ceil(aBudgetDistance / 100);
+    const bBudget = bBudgetDistance <= 0 ? 3 : -4 - Math.ceil(bBudgetDistance / 100);
     const aDistance = Math.abs(a.performanceTier - targetTier);
     const bDistance = Math.abs(b.performanceTier - targetTier);
-    return bFit + bBudget - bDistance - (aFit + aBudget - aDistance);
+    const aGameFit = performanceContext.knownGames.length
+      ? Math.min(...performanceContext.knownGames.map(({ profile }) => scorePerformanceFit(profile.performanceByResolution[request.resolution][a.id] ?? a.performanceTier, targetFpsTier)))
+      : 0;
+    const bGameFit = performanceContext.knownGames.length
+      ? Math.min(...performanceContext.knownGames.map(({ profile }) => scorePerformanceFit(profile.performanceByResolution[request.resolution][b.id] ?? b.performanceTier, targetFpsTier)))
+      : 0;
+    return (
+      (bFit + bBudget + bGameFit - bDistance)
+      - (aFit + aBudget + aGameFit - aDistance)
+    );
   });
 
   const gpu = rankedGpus[0];
-  const cpu = chooseCpu(gpu, request.preferences, request.budget);
+  const cpu = chooseCpu(gpu, request, request.preferences, request.budget, performanceContext);
   const motherboard = chooseMotherboard(cpu, request.preferences);
   const ram = chooseRam(motherboard, request.preferences, request.budget);
   const storage = chooseStorage(request.preferences, request.budget);
@@ -223,6 +284,15 @@ export function selectBasicBuild(request: BuildRequest): SelectedBuild {
     `${pcCase.name} matches your ${request.preferences.size.toLowerCase()} footprint preference.`,
     `${psu.wattage}W of Gold-rated power leaves headroom above the estimated draw.`,
   ];
+
+  if (performanceContext.knownGames.length) {
+    const gameNames = performanceContext.knownGames.map(({ profile }) => profile.name).join(', ');
+    notes.unshift(`${gameNames} influenced the GPU and CPU choices using approximate ${request.resolution} performance tiers.`);
+  }
+
+  if (performanceContext.unsupportedGames.length) {
+    notes.push(`Unsupported for performance estimation: ${performanceContext.unsupportedGames.join(', ')}. These titles were not used to estimate GPU or CPU performance.`);
+  }
 
   if (totalPrice > request.budget) {
     notes.push('This sample catalog cannot meet the full brief under the entered budget yet, so the closest performance match is shown.');
