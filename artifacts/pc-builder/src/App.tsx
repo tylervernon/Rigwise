@@ -5,41 +5,60 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import {
+  ArrowLeft,
   ArrowRight,
+  Box,
   Check,
-  CheckCircle2,
   CircuitBoard,
   Copy,
+  Cpu,
+  Fan,
+  Gauge,
+  HardDrive,
   Info,
+  MemoryStick,
   Plus,
   RotateCcw,
   ShieldCheck,
   X,
+  Zap,
 } from 'lucide-react';
+import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import {
-  Route,
-  Switch,
-  useLocation,
-  Router as WouterRouter,
-} from 'wouter';
+  type AppearancePreference,
+  type NoisePreference,
+  type Part,
+  type Resolution,
+  type SizePreference,
+} from '@/data/parts';
+import {
+  formatCategory,
+  selectBasicBuild,
+  type BuildPreferences,
+  type BuildRequest,
+  type SelectedBuild,
+} from '@/lib/build-recommender';
 
 const queryClient = new QueryClient();
 
+const defaultPreferences: BuildPreferences = {
+  size: 'Balanced',
+  noise: 'Quiet',
+  appearance: 'Understated',
+  upgradeability: 'Plan ahead',
+};
+
 function Home() {
   const [budget, setBudget] = useState('');
-  const [resolution, setResolution] = useState('');
+  const [resolution, setResolution] = useState<Resolution | ''>('');
   const [games, setGames] = useState<string[]>([]);
   const [gameInput, setGameInput] = useState('');
   const [fps, setFps] = useState(90);
-  const [preferences, setPreferences] = useState<Preferences>({
-    size: 'Balanced',
-    noise: 'Quiet',
-    appearance: 'Understated',
-    upgradeability: 'Plan ahead',
-  });
+  const [preferences, setPreferences] = useState<BuildPreferences>(defaultPreferences);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [buildRequest, setBuildRequest] = useState<BuildRequest | null>(null);
 
   const review = useMemo(() => ({
     budget: budget ? `$${Number(budget).toLocaleString('en-US')}` : 'Not set',
@@ -48,7 +67,12 @@ function Home() {
     fps: `${fps} FPS`,
   }), [budget, fps, games, resolution]);
 
-  const updatePreference = (key: keyof Preferences, value: string) => {
+  const selectedBuild = useMemo(
+    () => (buildRequest ? selectBasicBuild(buildRequest) : null),
+    [buildRequest],
+  );
+
+  const updatePreference = <T extends keyof BuildPreferences>(key: T, value: BuildPreferences[T]) => {
     setPreferences((current) => ({ ...current, [key]: value }));
   };
 
@@ -84,10 +108,17 @@ function Home() {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (validate()) {
-      setSubmitted(true);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+    if (!validate() || !resolution) return;
+
+    setBuildRequest({
+      budget: Number(budget),
+      resolution,
+      games: [...games],
+      fps,
+      preferences,
+    });
+    setSubmitted(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const resetPlan = () => {
@@ -96,17 +127,29 @@ function Home() {
     setGames([]);
     setGameInput('');
     setFps(90);
-    setPreferences({ size: 'Balanced', noise: 'Quiet', appearance: 'Understated', upgradeability: 'Plan ahead' });
+    setPreferences(defaultPreferences);
     setErrors({});
+    setBuildRequest(null);
     setSubmitted(false);
     setCopied(false);
   };
 
+  const editBrief = () => {
+    setSubmitted(false);
+    window.setTimeout(() => document.getElementById('section-budget')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+  };
+
   const copySummary = async () => {
-    const text = `My PC plan: ${review.budget}, ${review.resolution}, ${review.games}, target ${review.fps}.`;
-    if (navigator.clipboard) await navigator.clipboard.writeText(text);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2200);
+    const buildLines = selectedBuild
+      ? `\nSelected parts: ${selectedBuild.parts.map((part) => `${formatCategory(part.category)} — ${part.name}`).join(', ')}.\nSample total: ${formatCurrency(selectedBuild.totalPrice)}.`
+      : '';
+    const text = `My Rigwise plan: ${review.budget}, ${review.resolution}, ${review.games}, target ${review.fps}.${buildLines}`;
+    try {
+      if (navigator.clipboard) await navigator.clipboard.writeText(text);
+    } finally {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2200);
+    }
   };
 
   return (
@@ -119,7 +162,7 @@ function Home() {
           </div>
           <p className="rail-kicker">Build brief / 01</p>
           <nav className="rail-steps">
-            {['Budget', 'Performance', 'Preferences', 'Review'].map((label, index) => {
+            {['Budget', 'Performance', 'Preferences', 'Build'].map((label, index) => {
               const isCurrent = submitted ? index === 3 : index < 3;
               return (
                 <button
@@ -127,12 +170,8 @@ function Home() {
                   data-testid={`button-step-${label.toLowerCase()}`}
                   key={label}
                   onClick={() => {
-                    if (submitted) {
-                      if (index < 3) setSubmitted(false);
-                      window.setTimeout(() => document.getElementById(['section-budget', 'section-performance', 'section-preferences', 'section-review'][index])?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
-                    } else {
-                      document.getElementById(['section-budget', 'section-performance', 'section-preferences', 'section-review'][index])?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }
+                    if (submitted && index < 3) setSubmitted(false);
+                    window.setTimeout(() => document.getElementById(['section-budget', 'section-performance', 'section-preferences', 'section-review'][index])?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
                   }}
                   type="button"
                 >
@@ -160,49 +199,13 @@ function Home() {
 
         <div className="content-grid">
           <section>
-            {submitted ? (
-              <div className="review-state">
-                <div className="intro-row">
-                  <div>
-                    <p className="eyebrow"><i /> Brief complete</p>
-                    <h1 className="page-title">Your build brief is <em>locked in.</em></h1>
-                    <p className="page-subtitle">Here’s the signal you’ll want to carry into every PC conversation. Clear inputs, fewer compromises.</p>
-                  </div>
-                  <div className="status-pill"><span /> Ready to use</div>
-                </div>
-                <div className="review-hero">
-                  <div className="review-check"><CheckCircle2 size={21} /></div>
-                  <div>
-                    <h2>A solid starting point.</h2>
-                    <p>Rigwise has captured your priorities without pretending to know more than you told us.</p>
-                  </div>
-                </div>
-                <div className="review-block">
-                  <h3>The essentials</h3>
-                  <div className="review-items">
-                    <ReviewItem label="Comfortable budget" value={review.budget} />
-                    <ReviewItem label="Target resolution" value={review.resolution} />
-                    <ReviewItem label="Target frame rate" value={review.fps} />
-                    <ReviewItem label="Games" value={review.games} />
-                  </div>
-                </div>
-                <div className="review-block">
-                  <h3>Your preferences</h3>
-                  <div className="review-items">
-                    <ReviewItem label="Footprint" value={preferences.size} />
-                    <ReviewItem label="Sound profile" value={preferences.noise} />
-                    <ReviewItem label="Appearance" value={preferences.appearance} />
-                    <ReviewItem label="Future upgrades" value={preferences.upgradeability} />
-                  </div>
-                  <p className="review-note">This is a planning brief, not a product recommendation. Take it to a builder, a friend, or your next research session.</p>
-                  <div className="review-actions">
-                    <button className="primary-button" data-testid="button-copy-summary" onClick={copySummary} type="button">
-                      {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? 'Copied to clipboard' : 'Copy brief'}
-                    </button>
-                    <button className="secondary-button" data-testid="button-edit-brief" onClick={() => setSubmitted(false)} type="button">Edit brief</button>
-                  </div>
-                </div>
-              </div>
+            {submitted && selectedBuild ? (
+              <ResultsState
+                build={selectedBuild}
+                copied={copied}
+                onCopy={copySummary}
+                onEdit={editBrief}
+              />
             ) : (
               <>
                 <div className="intro-row">
@@ -220,9 +223,9 @@ function Home() {
                     <p className="field-hint">A realistic range helps every choice land in the right place.</p>
                     <div className="budget-field">
                       <span className="currency">$</span>
-                      <input className="text-input" data-testid="input-budget" id="budget" inputMode="numeric" min="500" onChange={(event) => setBudget(event.target.value.replace(/[^0-9]/g, ''))} placeholder="1,500" type="text" value={budget} />
+                      <input aria-describedby={errors.budget ? 'error-budget' : undefined} className="text-input" data-testid="input-budget" id="budget" inputMode="numeric" min="500" onChange={(event) => setBudget(event.target.value.replace(/[^0-9]/g, ''))} placeholder="1,500" type="text" value={budget} />
                     </div>
-                    {errors.budget && <p className="error-text" data-testid="error-budget">{errors.budget}</p>}
+                    {errors.budget && <p className="error-text" data-testid="error-budget" id="error-budget">{errors.budget}</p>}
                   </section>
 
                   <section className="section-block" id="section-performance">
@@ -235,7 +238,7 @@ function Home() {
                         ['1440p', 'The sweet spot'],
                         ['4K', 'Every detail turned up'],
                       ].map(([value, helper]) => (
-                        <button className={`option-card ${resolution === value ? 'selected' : ''}`} data-testid={`button-resolution-${value}`} key={value} onClick={() => { setResolution(value); setErrors((current) => ({ ...current, resolution: '' })); }} type="button">
+                        <button aria-pressed={resolution === value} className={`option-card ${resolution === value ? 'selected' : ''}`} data-testid={`button-resolution-${value}`} key={value} onClick={() => { setResolution(value as Resolution); setErrors((current) => ({ ...current, resolution: '' })); }} type="button">
                           <strong>{value}</strong><small>{helper}</small>
                         </button>
                       ))}
@@ -248,7 +251,7 @@ function Home() {
                     <label className="field-label" htmlFor="games">What do you actually play?</label>
                     <p className="field-hint">A few specific titles are more useful than a genre.</p>
                     <div className="game-input-row">
-                      <input className="text-input" data-testid="input-game" id="games" onChange={(event) => setGameInput(event.target.value)} onKeyDown={handleGameKeyDown} placeholder="Try “Baldur’s Gate 3”" type="text" value={gameInput} />
+                      <input aria-describedby={errors.games ? 'error-games' : undefined} className="text-input" data-testid="input-game" id="games" onChange={(event) => setGameInput(event.target.value)} onKeyDown={handleGameKeyDown} placeholder="Try “Baldur’s Gate 3”" type="text" value={gameInput} />
                       <button aria-label="Add game" className="add-button" data-testid="button-add-game" onClick={addGame} type="button"><Plus size={18} /></button>
                     </div>
                     <div className="game-tags" data-testid="list-games">
@@ -259,7 +262,7 @@ function Home() {
                         </span>
                       )) : <span className="empty-games">Your games will show up here.</span>}
                     </div>
-                    {errors.games && <p className="error-text" data-testid="error-games">{errors.games}</p>}
+                    {errors.games && <p className="error-text" data-testid="error-games" id="error-games">{errors.games}</p>}
                   </section>
 
                   <section className="section-block" id="section-performance-target">
@@ -279,34 +282,170 @@ function Home() {
                   <section className="section-block" id="section-preferences">
                     <div className="section-heading"><span className="section-index">05</span><h2 className="section-title">Make it yours</h2></div>
                     <div className="pref-list">
-                      <PreferenceRow label="Size" hint="How much space should it occupy?" options={['Compact', 'Balanced', 'Roomy']} value={preferences.size} onChange={(value) => updatePreference('size', value)} testId="size" />
-                      <PreferenceRow label="Noise" hint="How present should the fans be?" options={['Silent', 'Quiet', 'I don’t mind']} value={preferences.noise} onChange={(value) => updatePreference('noise', value)} testId="noise" />
-                      <PreferenceRow label="Appearance" hint="What should it say on your desk?" options={['Understated', 'A little drama', 'Showpiece']} value={preferences.appearance} onChange={(value) => updatePreference('appearance', value)} testId="appearance" />
-                      <PreferenceRow label="Upgradeability" hint="How long should the plan stretch?" options={['Keep it simple', 'Plan ahead']} value={preferences.upgradeability} onChange={(value) => updatePreference('upgradeability', value)} testId="upgradeability" />
+                      <PreferenceRow label="Size" hint="How much space should it occupy?" options={['Compact', 'Balanced', 'Roomy']} value={preferences.size} onChange={(value) => updatePreference('size', value as SizePreference)} testId="size" />
+                      <PreferenceRow label="Noise" hint="How present should the fans be?" options={['Silent', 'Quiet', 'I don’t mind']} value={preferences.noise} onChange={(value) => updatePreference('noise', value as NoisePreference)} testId="noise" />
+                      <PreferenceRow label="Appearance" hint="What should it say on your desk?" options={['Understated', 'A little drama', 'Showpiece']} value={preferences.appearance} onChange={(value) => updatePreference('appearance', value as AppearancePreference)} testId="appearance" />
+                      <PreferenceRow label="Upgradeability" hint="How long should the plan stretch?" options={['Keep it simple', 'Plan ahead']} value={preferences.upgradeability} onChange={(value) => updatePreference('upgradeability', value as BuildPreferences['upgradeability'])} testId="upgradeability" />
                     </div>
                   </section>
 
                   <div className="form-actions" id="section-review">
                     <button className="secondary-button" data-testid="button-clear-form" onClick={resetPlan} type="button">Clear everything</button>
-                    <button className="primary-button" data-testid="button-review-brief" type="submit">Review my brief <ArrowRight size={15} /></button>
+                    <button className="primary-button" data-testid="button-review-brief" type="submit">Build my baseline <ArrowRight size={15} /></button>
                   </div>
                 </form>
               </>
             )}
           </section>
-          <SummaryCard review={review} preferences={preferences} submitted={submitted} />
+          <SummaryCard build={selectedBuild} preferences={preferences} review={review} submitted={submitted} />
         </div>
       </main>
     </div>
   );
 }
 
-type Preferences = {
-  size: string;
-  noise: string;
-  appearance: string;
-  upgradeability: string;
-};
+function ResultsState({ build, copied, onCopy, onEdit }: { build: SelectedBuild; copied: boolean; onCopy: () => void; onEdit: () => void }) {
+  const tierLabel = getPerformanceTierLabel(build.performanceTier);
+  return (
+    <div className="results-state" id="section-review">
+      <div className="intro-row">
+        <div>
+          <p className="eyebrow"><i /> Build result / local catalog</p>
+          <h1 className="page-title">A baseline that <em>knows your priorities.</em></h1>
+          <p className="page-subtitle">Eight sample parts, selected from the local Rigwise catalog to give your brief a tangible starting point.</p>
+        </div>
+        <div className="status-pill result-pill"><span /> Baseline ready</div>
+      </div>
+
+      <div className="result-callout">
+        <div className="result-callout-mark"><Check size={19} /></div>
+        <div>
+          <p className="callout-kicker">Performance read</p>
+          <h2>{tierLabel}</h2>
+          <p>Graphics performance is the anchor here. The surrounding parts are chosen to keep the plan balanced, serviceable, and within the limits of this sample catalog.</p>
+        </div>
+      </div>
+
+      <div className="result-metrics" aria-label="Build summary metrics">
+        <MetricCard label="Sample total" value={formatCurrency(build.totalPrice)} detail="local catalog value" testId="metric-total" />
+        <MetricCard label="Estimated draw" value={`${build.estimatedPower}W`} detail="CPU + GPU + system margin" testId="metric-power" />
+        <MetricCard label={build.budgetRemaining >= 0 ? 'Budget left' : 'Over budget'} value={formatCurrency(Math.abs(build.budgetRemaining))} detail={build.budgetRemaining >= 0 ? 'before peripherals' : 'closest match shown'} testId="metric-remaining" />
+        <MetricCard label="Performance tier" value={`${build.performanceTier} / 4`} detail={tierLabel} testId="metric-tier" />
+      </div>
+
+      <section className="results-section" aria-labelledby="selected-parts-title">
+        <div className="results-section-heading">
+          <div>
+            <p className="section-index">01</p>
+            <h2 id="selected-parts-title">Selected parts</h2>
+          </div>
+          <span className="parts-count" data-testid="text-parts-count">{build.parts.length} components</span>
+        </div>
+        <div className="parts-grid">
+          {build.parts.map((part) => <PartCard key={part.id} part={part} />)}
+        </div>
+      </section>
+
+      <section className="results-section notes-section" aria-labelledby="recommender-notes-title">
+        <div className="results-section-heading">
+          <div>
+            <p className="section-index">02</p>
+            <h2 id="recommender-notes-title">Why this shape</h2>
+          </div>
+          <span className="notes-label"><Info size={13} /> Recommender notes</span>
+        </div>
+        <ul className="notes-list">
+          {build.notes.map((note, index) => <li data-testid={`text-note-${index}`} key={note}><span>{String(index + 1).padStart(2, '0')}</span>{note}</li>)}
+        </ul>
+      </section>
+
+      <div className="local-data-notice" data-testid="notice-local-data">
+        <ShieldCheck size={17} />
+        <div>
+          <strong>Use this as a planning baseline.</strong>
+          <p>Prices are local sample data, not live market prices. Rigwise has not run a full compatibility validation, so confirm clearances, BIOS support, connectors, and current pricing before you buy.</p>
+        </div>
+      </div>
+
+      <div className="results-actions">
+        <button className="secondary-button results-back" data-testid="button-edit-brief" onClick={onEdit} type="button"><ArrowLeft size={14} /> Edit brief</button>
+        <button className="primary-button" data-testid="button-copy-summary" onClick={onCopy} type="button">
+          {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? 'Copied to clipboard' : 'Copy build summary'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PartCard({ part }: { part: Part }) {
+  return (
+    <article className="part-card" data-testid={`card-part-${part.id}`}>
+      <div className="part-card-top">
+        <span className="part-icon"><PartIcon category={part.category} /></span>
+        <span className="part-category">{formatCategory(part.category)}</span>
+        <span className="part-price" data-testid={`text-price-${part.id}`}>{formatCurrency(part.price)}</span>
+      </div>
+      <h3 data-testid={`text-part-name-${part.id}`}>{part.name}</h3>
+      <p className="part-brand">{part.brand}</p>
+      <p className="part-meta">{getPartMeta(part)}</p>
+    </article>
+  );
+}
+
+function PartIcon({ category }: { category: Part['category'] }) {
+  if (category === 'cpu') return <Cpu aria-hidden="true" size={18} />;
+  if (category === 'gpu') return <Gauge aria-hidden="true" size={18} />;
+  if (category === 'ram') return <MemoryStick aria-hidden="true" size={18} />;
+  if (category === 'storage') return <HardDrive aria-hidden="true" size={18} />;
+  if (category === 'psu') return <Zap aria-hidden="true" size={18} />;
+  if (category === 'case') return <Box aria-hidden="true" size={18} />;
+  if (category === 'cooler') return <Fan aria-hidden="true" size={18} />;
+  return <CircuitBoard aria-hidden="true" size={18} />;
+}
+
+function getPartMeta(part: Part) {
+  switch (part.category) {
+    case 'cpu':
+      return `${part.cores} cores · ${part.socket} · ${part.powerDraw}W`;
+    case 'gpu':
+      return `${part.vramGb}GB VRAM · ${part.powerDraw}W · ${part.lengthMm}mm`;
+    case 'motherboard':
+      return `${part.formFactor} · ${part.socket} · ${part.m2Slots} M.2 slots`;
+    case 'ram':
+      return `${part.capacityGb}GB · ${part.speedMhz}MHz · ${part.sticks}-stick kit`;
+    case 'storage':
+      return `${part.capacityGb >= 1000 ? `${part.capacityGb / 1000}TB` : `${part.capacityGb}GB`} · ${part.interface}`;
+    case 'psu':
+      return `${part.wattage}W · ${part.efficiency} · Modular`;
+    case 'case':
+      return `${part.size} · ${part.maxGpuLengthMm}mm GPU clearance`;
+    case 'cooler':
+      return `${part.noise} · ${part.thermalCapacityW}W thermal capacity`;
+  }
+}
+
+function getPerformanceTierLabel(tier: number) {
+  return {
+    1: 'Entry 1080p',
+    2: 'Mainstream 1080p / 1440p',
+    3: 'High 1440p',
+    4: 'Enthusiast 4K',
+  }[tier] ?? 'Baseline performance';
+}
+
+function formatCurrency(value: number) {
+  return `$${value.toLocaleString('en-US')}`;
+}
+
+function MetricCard({ label, value, detail, testId }: { label: string; value: string; detail: string; testId: string }) {
+  return (
+    <div className="metric-card" data-testid={testId}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{detail}</small>
+    </div>
+  );
+}
 
 function PreferenceRow({ label, hint, options, value, onChange, testId }: { label: string; hint: string; options: string[]; value: string; onChange: (value: string) => void; testId: string }) {
   return (
@@ -314,42 +453,55 @@ function PreferenceRow({ label, hint, options, value, onChange, testId }: { labe
       <div className="pref-copy"><strong>{label}</strong><span>{hint}</span></div>
       <div className="segmented" role="group" aria-label={`${label} preference`}>
         {options.map((option) => (
-          <button className={`seg-button ${value === option ? 'selected' : ''}`} data-testid={`button-${testId}-${option.toLowerCase().replace(/\s+/g, '-')}`} key={option} onClick={() => onChange(option)} type="button">{option}</button>
+          <button aria-pressed={value === option} className={`seg-button ${value === option ? 'selected' : ''}`} data-testid={`button-${testId}-${option.toLowerCase().replace(/\s+/g, '-')}`} key={option} onClick={() => onChange(option)} type="button">{option}</button>
         ))}
       </div>
     </div>
   );
 }
 
-function ReviewItem({ label, value }: { label: string; value: string }) {
-  return <div className="review-item" data-testid={`review-${label.toLowerCase().replace(/\s+/g, '-')}`}><span>{label}</span><strong>{value}</strong></div>;
-}
-
-function SummaryCard({ review, preferences, submitted }: { review: { budget: string; resolution: string; games: string; fps: string }; preferences: Preferences; submitted: boolean }) {
+function SummaryCard({ review, preferences, submitted, build }: { review: { budget: string; resolution: string; games: string; fps: string }; preferences: BuildPreferences; submitted: boolean; build: SelectedBuild | null }) {
   return (
-    <aside className="summary-card" data-testid="card-summary">
+    <aside className={`summary-card ${build ? 'summary-card-results' : ''}`} data-testid="card-summary">
       <div className="summary-inner">
-        <p className="summary-label">{submitted ? 'Brief snapshot' : 'Live snapshot'}</p>
-        <h2 className="summary-title">{submitted ? 'A brief worth bringing along.' : 'Your build, in plain English.'}</h2>
-        <p className="summary-intro">{submitted ? 'Everything you told us, in one compact place.' : 'As you answer, this little snapshot keeps the important stuff visible.'}</p>
+        <p className="summary-label">{build ? 'Selected baseline' : submitted ? 'Brief snapshot' : 'Live snapshot'}</p>
+        <h2 className="summary-title">{build ? getPerformanceTierLabel(build.performanceTier) : submitted ? 'A brief worth bringing along.' : 'Your build, in plain English.'}</h2>
+        <p className="summary-intro">{build ? 'A local, sample-data translation of the brief you just submitted.' : submitted ? 'Everything you told us, in one compact place.' : 'As you answer, this little snapshot keeps the important stuff visible.'}</p>
         <div className="summary-divider" />
-        <dl className="summary-list">
-          <SummaryLine label="Budget" value={review.budget} />
-          <SummaryLine label="Resolution" value={review.resolution} />
-          <SummaryLine label="Games" value={review.games} games={review.games !== 'No games added' ? review.games.split(', ') : []} />
-          <SummaryLine label="Target" value={review.fps} />
-        </dl>
-        <div className="summary-divider" />
-        <dl className="summary-list">
-          <SummaryLine label="Size" value={preferences.size} />
-          <SummaryLine label="Noise" value={preferences.noise} />
-          <SummaryLine label="Look" value={preferences.appearance} />
-          <SummaryLine label="Upgrade path" value={preferences.upgradeability} />
-        </dl>
-        <div className="confidence">
-          <ShieldCheck size={16} />
-          <div><strong>No hidden assumptions</strong><p>We only use what you choose. No pricing, parts, or compatibility claims yet.</p></div>
-        </div>
+        {build ? (
+          <>
+            <dl className="summary-list">
+              <SummaryLine label="Sample total" value={formatCurrency(build.totalPrice)} />
+              <SummaryLine label="Estimated draw" value={`${build.estimatedPower}W`} />
+              <SummaryLine label={build.budgetRemaining >= 0 ? 'Budget remaining' : 'Over budget'} value={formatCurrency(Math.abs(build.budgetRemaining))} />
+              <SummaryLine label="Parts selected" value={`${build.parts.length} components`} />
+            </dl>
+            <div className="confidence">
+              <ShieldCheck size={16} />
+              <div><strong>Local planning mode</strong><p>Sample catalog values only. Confirm live prices and compatibility before purchase.</p></div>
+            </div>
+          </>
+        ) : (
+          <>
+            <dl className="summary-list">
+              <SummaryLine label="Budget" value={review.budget} />
+              <SummaryLine label="Resolution" value={review.resolution} />
+              <SummaryLine label="Games" value={review.games} games={review.games !== 'No games added' ? review.games.split(', ') : []} />
+              <SummaryLine label="Target" value={review.fps} />
+            </dl>
+            <div className="summary-divider" />
+            <dl className="summary-list">
+              <SummaryLine label="Size" value={preferences.size} />
+              <SummaryLine label="Noise" value={preferences.noise} />
+              <SummaryLine label="Look" value={preferences.appearance} />
+              <SummaryLine label="Upgrade path" value={preferences.upgradeability} />
+            </dl>
+            <div className="confidence">
+              <ShieldCheck size={16} />
+              <div><strong>No hidden assumptions</strong><p>We only use what you choose. No pricing, parts, or compatibility claims yet.</p></div>
+            </div>
+          </>
+        )}
         <p className="summary-hint"><Info size={10} /> This stays in your browser for now.</p>
       </div>
     </aside>
@@ -369,8 +521,6 @@ function SummaryLine({ label, value, games = [] }: { label: string; value: strin
 
 function Router() {
   return (
-    // Keep a shared shell (sidebar, navbar) outside the boundary so it
-    // survives a page crash.
     <RoutedErrorBoundary>
       <Switch>
         <Route path="/" component={Home} />
