@@ -125,8 +125,14 @@ export type PsuPart = BasePart & {
   modular: boolean;
 };
 
+export type CaseFormFactor =
+  | 'Mini-ITX'
+  | 'Micro-ATX'
+  | 'ATX';
+
 export type CasePart = BasePart & {
   category: 'case';
+  formFactor: CaseFormFactor;
   size: SizePreference;
   appearance: AppearancePreference;
   supportedFormFactors: Array<
@@ -1505,177 +1511,232 @@ export const psus: PsuPart[] = [
 /* ============================================================
  * CASES
  * ============================================================
+ *
+ * formFactor = the case's actual primary class.
+ * supportedFormFactors = motherboard sizes that physically fit.
+ *
+ * These are intentionally kept separate so, for example, an ATX
+ * case that accepts Micro-ATX boards is NOT returned when the user
+ * specifically asks for a Micro-ATX case.
+ * ============================================================
  */
 
 export const cases: CasePart[] = [
 
-  {
-    id: 'case-okinos-budget',
-    name: 'Okinos Budget Airflow',
-    category: 'case',
-    brand: 'Okinos',
-    price: 40,
-    size: 'Balanced',
-    appearance: 'A little drama',
-    supportedFormFactors: [
-      'Mini-ITX',
-      'Micro-ATX',
-      'ATX',
-    ],
-    maxGpuLengthMm: 320,
-    maxCoolerHeightMm: 160,
-  },
+  // ---------------- MINI-ITX ----------------
 
   {
-    id: 'case-okinos-argb',
-    name: 'Okinos ARGB Airflow',
+    id: 'case-cooler-master-nr200p',
+    name: 'MasterBox NR200P',
     category: 'case',
-    brand: 'Okinos',
-    price: 50,
-    size: 'Balanced',
-    appearance: 'Showpiece',
-    supportedFormFactors: [
-      'Mini-ITX',
-      'Micro-ATX',
-      'ATX',
-    ],
-    maxGpuLengthMm: 340,
-    maxCoolerHeightMm: 165,
-  },
-
-  {
-    id: 'case-sama-budget',
-    name: 'SAMA Budget Airflow',
-    category: 'case',
-    brand: 'SAMA',
-    price: 40,
-    size: 'Balanced',
-    appearance: 'A little drama',
-    supportedFormFactors: [
-      'Mini-ITX',
-      'Micro-ATX',
-      'ATX',
-    ],
-    maxGpuLengthMm: 330,
-    maxCoolerHeightMm: 165,
-  },
-
-  {
-    id: 'case-sama-argb',
-    name: 'SAMA ARGB Tempered Glass',
-    category: 'case',
-    brand: 'SAMA',
-    price: 55,
-    size: 'Balanced',
-    appearance: 'Showpiece',
-    supportedFormFactors: [
-      'Mini-ITX',
-      'Micro-ATX',
-      'ATX',
-    ],
-    maxGpuLengthMm: 350,
-    maxCoolerHeightMm: 170,
-  },
-
-  {
-    id: 'case-diypc-budget',
-    name: 'DIYPC Budget Airflow',
-    category: 'case',
-    brand: 'DIYPC',
-    price: 35,
+    brand: 'Cooler Master',
+    price: 110,
+    formFactor: 'Mini-ITX',
     size: 'Compact',
     appearance: 'A little drama',
-    supportedFormFactors: [
-      'Mini-ITX',
-      'Micro-ATX',
-      'ATX',
-    ],
-    maxGpuLengthMm: 300,
-    maxCoolerHeightMm: 158,
-  },
-
-  {
-    id: 'case-diypc-argb',
-    name: 'DIYPC ARGB Gaming Case',
-    category: 'case',
-    brand: 'DIYPC',
-    price: 50,
-    size: 'Balanced',
-    appearance: 'Showpiece',
-    supportedFormFactors: [
-      'Mini-ITX',
-      'Micro-ATX',
-      'ATX',
-    ],
+    supportedFormFactors: ['Mini-ITX'],
     maxGpuLengthMm: 330,
-    maxCoolerHeightMm: 165,
+    maxCoolerHeightMm: 155,
   },
 
+  // ---------------- MICRO-ATX ----------------
+
   {
-    id: 'case-montech-air-100',
-    name: 'Montech AIR 100',
+    id: 'case-montech-air-100-argb',
+    name: 'AIR 100 ARGB',
     category: 'case',
     brand: 'Montech',
-    price: 50,
+    price: 70,
+    formFactor: 'Micro-ATX',
     size: 'Compact',
-    appearance: 'A little drama',
-    supportedFormFactors: [
-      'Mini-ITX',
-      'Micro-ATX',
-    ],
+    appearance: 'Showpiece',
+    supportedFormFactors: ['Micro-ATX', 'Mini-ITX'],
     maxGpuLengthMm: 330,
     maxCoolerHeightMm: 161,
   },
 
   {
+    id: 'case-lian-li-a3-matx',
+    name: 'A3-mATX',
+    category: 'case',
+    brand: 'Lian Li',
+    price: 85,
+    formFactor: 'Micro-ATX',
+    size: 'Compact',
+    appearance: 'Understated',
+    supportedFormFactors: ['Micro-ATX', 'Mini-ITX'],
+    maxGpuLengthMm: 415,
+    maxCoolerHeightMm: 165,
+  },
+
+  {
+    id: 'case-sama-argb-q5',
+    name: 'ARGB-Q5-BK',
+    category: 'case',
+    brand: 'SAMA',
+    price: 73,
+    formFactor: 'Micro-ATX',
+    size: 'Balanced',
+    appearance: 'Showpiece',
+    supportedFormFactors: ['Micro-ATX', 'Mini-ITX'],
+    maxGpuLengthMm: 345,
+    maxCoolerHeightMm: 160,
+  },
+
+  {
+    id: 'case-diypc-cube03',
+    name: 'DIY-CUBE03-BK',
+    category: 'case',
+    brand: 'DIYPC',
+    price: 50,
+    formFactor: 'Micro-ATX',
+    size: 'Compact',
+    appearance: 'Showpiece',
+    supportedFormFactors: ['Micro-ATX', 'Mini-ITX'],
+    maxGpuLengthMm: 330,
+    maxCoolerHeightMm: 157,
+  },
+
+  {
+    id: 'case-diypc-v2-microatx',
+    name: 'DIY-V2-MicroATX',
+    category: 'case',
+    brand: 'DIYPC',
+    price: 60,
+    formFactor: 'Micro-ATX',
+    size: 'Compact',
+    appearance: 'Understated',
+    supportedFormFactors: ['Micro-ATX', 'Mini-ITX'],
+    maxGpuLengthMm: 280,
+    maxCoolerHeightMm: 163,
+  },
+
+  {
+    id: 'case-diypc-f2-w',
+    name: 'DIY-F2-W',
+    category: 'case',
+    brand: 'DIYPC',
+    price: 50,
+    formFactor: 'Micro-ATX',
+    size: 'Compact',
+    appearance: 'Understated',
+    supportedFormFactors: ['Micro-ATX'],
+    maxGpuLengthMm: 315,
+    maxCoolerHeightMm: 160,
+  },
+
+  {
+    id: 'case-montech-x5m',
+    name: 'X5M',
+    category: 'case',
+    brand: 'Montech',
+    price: 55,
+    formFactor: 'Micro-ATX',
+    size: 'Balanced',
+    appearance: 'Showpiece',
+    supportedFormFactors: ['Micro-ATX', 'Mini-ITX'],
+    maxGpuLengthMm: 405,
+    maxCoolerHeightMm: 165,
+  },
+
+  // ---------------- ATX ----------------
+
+  {
+    id: 'case-diypc-s05-atx',
+    name: 'DIY-S05-BK',
+    category: 'case',
+    brand: 'DIYPC',
+    price: 60,
+    formFactor: 'ATX',
+    size: 'Balanced',
+    appearance: 'Understated',
+    supportedFormFactors: ['ATX', 'Micro-ATX', 'Mini-ITX'],
+    maxGpuLengthMm: 370,
+    maxCoolerHeightMm: 166,
+  },
+
+  {
+    id: 'case-sama-v40',
+    name: 'V40',
+    category: 'case',
+    brand: 'SAMA',
+    price: 67,
+    formFactor: 'ATX',
+    size: 'Roomy',
+    appearance: 'Showpiece',
+    supportedFormFactors: ['ATX', 'Micro-ATX', 'Mini-ITX'],
+    maxGpuLengthMm: 410,
+    maxCoolerHeightMm: 181,
+  },
+
+  {
     id: 'case-montech-air-903',
-    name: 'Montech AIR 903',
+    name: 'AIR 903',
     category: 'case',
     brand: 'Montech',
     price: 70,
+    formFactor: 'ATX',
     size: 'Roomy',
     appearance: 'A little drama',
-    supportedFormFactors: [
-      'Mini-ITX',
-      'Micro-ATX',
-      'ATX',
-    ],
+    supportedFormFactors: ['ATX', 'Micro-ATX', 'Mini-ITX'],
     maxGpuLengthMm: 400,
     maxCoolerHeightMm: 180,
   },
 
   {
-    id: 'case-montech-x3-mesh',
-    name: 'Montech X3 Mesh',
+    id: 'case-lian-li-lancool-207',
+    name: 'LANCOOL 207',
     category: 'case',
-    brand: 'Montech',
-    price: 60,
+    brand: 'Lian Li',
+    price: 83,
+    formFactor: 'ATX',
     size: 'Balanced',
-    appearance: 'Showpiece',
-    supportedFormFactors: [
-      'Mini-ITX',
-      'Micro-ATX',
-      'ATX',
-    ],
-    maxGpuLengthMm: 305,
-    maxCoolerHeightMm: 160,
+    appearance: 'A little drama',
+    supportedFormFactors: ['ATX', 'Micro-ATX', 'Mini-ITX'],
+    maxGpuLengthMm: 410,
+    maxCoolerHeightMm: 167,
   },
 
   {
-    id: 'case-4000d-airflow',
+    id: 'case-fractal-pop-air',
+    name: 'Pop Air',
+    category: 'case',
+    brand: 'Fractal Design',
+    price: 80,
+    formFactor: 'ATX',
+    size: 'Balanced',
+    appearance: 'Understated',
+    supportedFormFactors: ['ATX', 'Micro-ATX', 'Mini-ITX'],
+    maxGpuLengthMm: 405,
+    maxCoolerHeightMm: 170,
+  },
+
+  {
+    id: 'case-corsair-4000d-airflow',
     name: '4000D Airflow',
     category: 'case',
     brand: 'Corsair',
     price: 90,
+    formFactor: 'ATX',
     size: 'Balanced',
     appearance: 'Understated',
-    supportedFormFactors: [
-      'Mini-ITX',
-      'Micro-ATX',
-      'ATX',
-    ],
+    supportedFormFactors: ['ATX', 'Micro-ATX', 'Mini-ITX'],
     maxGpuLengthMm: 360,
     maxCoolerHeightMm: 170,
+  },
+
+  {
+    id: 'case-sama-v52',
+    name: 'V52',
+    category: 'case',
+    brand: 'SAMA',
+    price: 90,
+    formFactor: 'ATX',
+    size: 'Roomy',
+    appearance: 'Showpiece',
+    supportedFormFactors: ['ATX', 'Micro-ATX', 'Mini-ITX'],
+    maxGpuLengthMm: 420,
+    maxCoolerHeightMm: 158,
   },
 
   {
@@ -1683,48 +1744,25 @@ export const cases: CasePart[] = [
     name: 'H5 Flow',
     category: 'case',
     brand: 'NZXT',
-    price: 90,
+    price: 95,
+    formFactor: 'ATX',
     size: 'Balanced',
     appearance: 'Understated',
-    supportedFormFactors: [
-      'Mini-ITX',
-      'Micro-ATX',
-      'ATX',
-    ],
+    supportedFormFactors: ['ATX', 'Micro-ATX', 'Mini-ITX'],
     maxGpuLengthMm: 365,
     maxCoolerHeightMm: 165,
   },
 
   {
-    id: 'case-fractal-pop-air',
-    name: 'Pop Air',
-    category: 'case',
-    brand: 'Fractal',
-    price: 80,
-    size: 'Balanced',
-    appearance: 'Understated',
-    supportedFormFactors: [
-      'Mini-ITX',
-      'Micro-ATX',
-      'ATX',
-    ],
-    maxGpuLengthMm: 405,
-    maxCoolerHeightMm: 170,
-  },
-
-  {
     id: 'case-montech-king-95',
-    name: 'Montech KING 95',
+    name: 'KING 95',
     category: 'case',
     brand: 'Montech',
     price: 130,
+    formFactor: 'ATX',
     size: 'Roomy',
     appearance: 'Showpiece',
-    supportedFormFactors: [
-      'Mini-ITX',
-      'Micro-ATX',
-      'ATX',
-    ],
+    supportedFormFactors: ['ATX', 'Micro-ATX', 'Mini-ITX'],
     maxGpuLengthMm: 420,
     maxCoolerHeightMm: 175,
   },

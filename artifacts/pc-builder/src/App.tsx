@@ -38,7 +38,6 @@ import {
 
 import {
   type AppearancePreference,
-  type NoisePreference,
   type Part,
   type Resolution,
   type SizePreference,
@@ -227,9 +226,46 @@ function Home() {
 
     setErrors(nextErrors);
 
-    return (
-      Object.keys(nextErrors).length === 0
+    return nextErrors;
+  };
+
+  const focusFirstError = (
+    validationErrors: Record<string, string>,
+  ) => {
+    const sectionForError: Record<string, string> = {
+      budget: 'section-budget',
+      resolution: 'section-performance',
+      games: 'section-games',
+      graphicsPreset: 'section-graphics',
+      storage: 'section-storage',
+    };
+
+    const errorOrder = [
+      'budget',
+      'resolution',
+      'games',
+      'graphicsPreset',
+      'storage',
+    ];
+
+    const firstError = errorOrder.find(
+      (key) => validationErrors[key],
     );
+
+    if (!firstError) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      document
+        .getElementById(
+          sectionForError[firstError],
+        )
+        ?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        });
+    }, 0);
   };
 
   const handleSubmit = (
@@ -237,8 +273,16 @@ function Home() {
   ) => {
     event.preventDefault();
 
+    const validationErrors = validate();
+
     if (
-      !validate() ||
+      Object.keys(validationErrors).length > 0
+    ) {
+      focusFirstError(validationErrors);
+      return;
+    }
+
+    if (
       !resolution ||
       !graphicsPreset ||
       !storageCapacity
@@ -545,14 +589,19 @@ function Home() {
                         id="budget"
                         inputMode="numeric"
                         min="500"
-                        onChange={(event) =>
+                        onChange={(event) => {
                           setBudget(
                             event.target.value.replace(
                               /[^0-9]/g,
                               '',
                             ),
-                          )
-                        }
+                          );
+
+                          setErrors((current) => ({
+                            ...current,
+                            budget: '',
+                          }));
+                        }}
                         placeholder="1,500"
                         type="text"
                         value={budget}
@@ -1099,16 +1148,41 @@ function Home() {
                         hint="How much space should it occupy?"
                         options={[
                           'ITX (compact)',
-                          'MATX (meduim)',
+                          'MATX (medium)',
                           'ATX (large)',
                         ]}
-                        value={preferences.size}
-                        onChange={(value) =>
+                        value={
+                          preferences.size === 'Compact'
+                            ? 'ITX (compact)'
+                            : preferences.size === 'Balanced'
+                              ? 'MATX (medium)'
+                              : 'ATX (large)'
+                        }
+                        onChange={(value) => {
+                          /*
+                           * IMPORTANT:
+                           * The displayed labels are converted back
+                           * into the canonical SizePreference values
+                           * used by build-recommender.ts.
+                           *
+                           * ITX  -> Compact -> Mini-ITX
+                           * MATX -> Balanced -> Micro-ATX
+                           * ATX  -> Roomy    -> ATX
+                           */
+                          const sizeMap: Record<
+                            string,
+                            SizePreference
+                          > = {
+                            'ITX (compact)': 'Compact',
+                            'MATX (medium)': 'Balanced',
+                            'ATX (large)': 'Roomy',
+                          };
+
                           updatePreference(
                             'size',
-                            value as SizePreference,
-                          )
-                        }
+                            sizeMap[value],
+                          );
+                        }}
                         testId="size"
                       />
 
@@ -1609,23 +1683,12 @@ function SummaryCard({
               />
 
               <SummaryLine
-                label="Noise"
-                value={preferences.noise}
-              />
-
-              <SummaryLine
                 label="Look"
                 value={
                   preferences.appearance
                 }
               />
 
-              <SummaryLine
-                label="Upgrade path"
-                value={
-                  preferences.upgradeability
-                }
-              />
             </dl>
 
             <div className="confidence">
